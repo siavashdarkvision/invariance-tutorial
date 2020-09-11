@@ -95,9 +95,24 @@ def one_hot(labels):
     return one_hot_encoding
 
 
-def get_mnist():
+def rotate_mnist(data_x):
+    data_r = np.random.randint(IMG_DIM, size=data_x.shape[0])
+    rot_fn = lambda i, r, data: np.take(data[i, ...], range(rot, rot + data.shape[1]), mode='wrap', axis=0)
+    exp_fn = lambda d: np.expand_dims(d, axis=0)
+    data_x = np.vstack([exp_fn(rot_fn(i, rot, train_x)) for i, rot in enumerate(data_r)])
+    return data_x, data_r
+
+
+def get_mnist(rotate=True):
     #data comes as images and 1-dim {0,...,9} categorical variable
     (train_x, train_y), (test_x, test_y) = tf.keras.datasets.mnist.load_data()
+
+    if rotate:
+        train_x, train_r = rotate_mnist(train_x)
+        test_x, test_r = rotate_mnist(test_x)
+    else:
+        train_r = np.zeros((train_x.shape[0],), dtype=np.int)
+        test_r = np.zeros((test_x.shape[0],), dtype=np.int)
 
     #cast and flatten images, renormalizing to [0,1]
     train_x = train_x.astype(np.float32).reshape( (train_x.shape[0], IMG_DIM ** 2) ) / MAX_INTENSITY
@@ -106,7 +121,10 @@ def get_mnist():
     train_y = one_hot(train_y).astype(np.float32)
     test_y = one_hot(test_y).astype(np.float32)
 
-    return (train_x, train_y), (test_x, test_y)
+    train_r = one_hot(train_r).astype(np.float32)
+    test_r = one_hot(test_r).astype(np.float32)
+
+    return (train_x, train_y, train_r), (test_x, test_y, test_r)
 
 
 def encoder(input_x):
@@ -189,7 +207,8 @@ def visualize_samples(model, test_x, test_y, n_samples=10):
 
 
 def main():
-    (train_x, train_y), (test_x, test_y) = get_mnist()
+    (train_x, train_y, train_r), (test_x, test_y, test_r) = get_mnist(rotate=False)
+
     params = {"beta" : 0.1, "lambda" : 1.0, "learning_rate": 0.0005}
     model = get_model(params)
 
