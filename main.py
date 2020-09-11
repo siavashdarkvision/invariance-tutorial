@@ -11,8 +11,10 @@ from src.plot_tools import pics_tools as pic
 NUM_LABELS = 10
 IMG_DIM = 28
 MAX_INTENSITY = 255.0
+NUM_ROTATIONS = IMG_DIM
 DIM_Z = 16
 DIM_C = NUM_LABELS
+DIM_R = IMG_DIM
 INPUT_SHAPE = IMG_DIM ** 2
 ACTIVATION = "tanh"
 
@@ -87,19 +89,19 @@ def sampling(args):
     return z_mean + K.exp(0.5 * z_log_var) * epsilon
 
 
-def one_hot(labels):
+def one_hot(labels, num_labels):
     num_labels_data = labels.shape[0]
-    one_hot_encoding = np.zeros((num_labels_data, NUM_LABELS))
+    one_hot_encoding = np.zeros((num_labels_data, num_labels))
     one_hot_encoding[np.arange(num_labels_data), labels] = 1
-    one_hot_encoding = np.reshape(one_hot_encoding, [-1, NUM_LABELS])
+    one_hot_encoding = np.reshape(one_hot_encoding, [-1, num_labels])
     return one_hot_encoding
 
 
 def rotate_mnist(data_x):
     data_r = np.random.randint(IMG_DIM, size=data_x.shape[0])
-    rot_fn = lambda i, r, data: np.take(data[i, ...], range(rot, rot + data.shape[1]), mode='wrap', axis=0)
+    rot_fn = lambda i, r, data: np.take(data[i, ...], range(r, r + data.shape[1]), mode='wrap', axis=0)
     exp_fn = lambda d: np.expand_dims(d, axis=0)
-    data_x = np.vstack([exp_fn(rot_fn(i, rot, train_x)) for i, rot in enumerate(data_r)])
+    data_x = np.vstack([exp_fn(rot_fn(i, rot, data_x)) for i, rot in enumerate(data_r)])
     return data_x, data_r
 
 
@@ -118,11 +120,11 @@ def get_mnist(rotate=True):
     train_x = train_x.astype(np.float32).reshape( (train_x.shape[0], IMG_DIM ** 2) ) / MAX_INTENSITY
     test_x = test_x.astype(np.float32).reshape( (test_x.shape[0], IMG_DIM ** 2) ) / MAX_INTENSITY
 
-    train_y = one_hot(train_y).astype(np.float32)
-    test_y = one_hot(test_y).astype(np.float32)
+    train_y = one_hot(train_y, NUM_LABELS).astype(np.float32)
+    test_y = one_hot(test_y, NUM_LABELS).astype(np.float32)
 
-    train_r = one_hot(train_r).astype(np.float32)
-    test_r = one_hot(test_r).astype(np.float32)
+    train_r = one_hot(train_r, NUM_ROTATIONS).astype(np.float32)
+    test_r = one_hot(test_r, NUM_ROTATIONS).astype(np.float32)
 
     return (train_x, train_y, train_r), (test_x, test_y, test_r)
 
@@ -139,8 +141,8 @@ def encoder(input_x):
     return z, z_mean, z_log_sigma_sq
 
 
-def decoder(z, input_c):
-    z_with_c = keras.layers.concatenate([z,input_c])
+def decoder(z, input_c, input_r):
+    z_with_c = keras.layers.concatenate([z, input_c, input_r])
 
     dec_hidden_1 = keras.layers.Dense(512, activation=ACTIVATION, name="dec_h1")(z_with_c)
     dec_hidden_2 = keras.layers.Dense(512, activation=ACTIVATION, name="dec_h2")(dec_hidden_1)
@@ -168,46 +170,52 @@ def get_loss(input_x, x_hat, z_mean, z_log_sigma_sq, params):
 def get_model(params):
     input_x = keras.layers.Input(shape = [INPUT_SHAPE], name="x")
     input_c = keras.layers.Input(shape = [DIM_C], name="c")
+    input_r = keras.layers.Input(shape = [DIM_R], name="r")
 
     z, z_mean, z_log_sigma_sq = encoder(input_x)
-    x_hat = decoder(z, input_c)
+    x_hat = decoder(z, input_c, input_r)
 
-    model = keras.models.Model(inputs=[input_x, input_c], outputs=x_hat, name="ICVAE")
+    model = keras.models.Model(inputs=[input_x, input_c, input_r], outputs=x_hat, name="ICVAE")
     loss = get_loss(input_x, x_hat, z_mean, z_log_sigma_sq, params)
     model.add_loss(loss)
 
     return model
 
 
-def visualize_samples(model, test_x, test_y, n_samples=10):
-    X_test_set, Y_test_set = [], []
+def visualize_samples(model, test_x, test_y, test_r, n_samples=10):
+    X_test_set, Y_test_set, R_test_set = [], [], []
 
     for i in range(n_samples):
-        tmp_tile_array = np.tile(test_x[i],[10, 1])
-        X_test_set.append(test_x[i:(i+1),:])
-        X_test_set.append(tmp_tile_array)
+        x_tile_array = np.tile(test_x[i], [28, 1])
+        X_test_set.append(test_x[i:(i+1), :])
+        X_test_set.append(x_tile_array)
 
-        Y_test_set.append(test_y[i:(i+1),:])
-        Y_test_set.append(np.eye(10))
+        y_tile_array = np.tile(test_y[i], [28, 1])
+        Y_test_set.append(test_y[i:(i+1), :])
+        Y_test_set.append(y_tile_array)
+
+        R_test_set.append(test_r[i:(i+1), :])
+        R_test_set.append(np.eye(28))
 
     X_test_set = np.concatenate(X_test_set, axis=0)
     Y_test_set = np.concatenate(Y_test_set, axis=0)
+    R_test_set = np.concatenate(R_test_set, axis=0)
 
-    X_test_hat = model.predict({ "x" : X_test_set, "c" : Y_test_set })
+    X_test_hat = model.predict({ "x" : X_test_set, "c" : Y_test_set, "r": R_test_set })
 
     plot_collection = []
     for i in range(n_samples):
         plot_collection.append( test_x[i:(i+1),:] )
-        plot_collection.append( X_test_hat[i*11:(i+1)*11,:] )
+        plot_collection.append( X_test_hat[i*29:(i+1)*29,:] )
 
     plot_collection = np.concatenate(plot_collection, axis=0)
 
-    fig = pic.plot_image_grid(1-plot_collection, [IMG_DIM, IMG_DIM], (n_samples, 12))
+    fig = pic.plot_image_grid(1-plot_collection, [IMG_DIM, IMG_DIM], (n_samples, 30))
     plt.show()
 
 
 def main():
-    (train_x, train_y, train_r), (test_x, test_y, test_r) = get_mnist(rotate=False)
+    (train_x, train_y, train_r), (test_x, test_y, test_r) = get_mnist(rotate=True)
 
     params = {"beta" : 0.1, "lambda" : 1.0, "learning_rate": 0.0005}
     model = get_model(params)
@@ -217,13 +225,14 @@ def main():
 
     if not os.path.exists("mnist_icvae.h5"):
         print("training")
-        model.fit({ "x" : train_x, "c" : train_y }, epochs=100)
+        model.fit({ "x" : train_x, "c" : train_y, "r": train_r }, epochs=100)
         model.save_weights("mnist_icvae.h5")
     else:
         print("loading from file")
         model.load_weights("mnist_icvae.h5")
 
-    visualize_samples(model, test_x, test_y)
+
+    visualize_samples(model, test_x, test_y, test_r)
 
 
 if __name__ == '__main__':

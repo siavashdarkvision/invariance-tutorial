@@ -47,6 +47,8 @@ def plot_image_grid(x_data, img_shape, grid_shape):
         ax[i,j].imshow(img_data, interpolation="nearest", cmap="gray", vmin=0, vmax=1)
         ax[i,j].get_xaxis().set_visible(False)
         ax[i,j].get_yaxis().set_visible(False)
+
   plt.tight_layout()
+  plt.subplots_adjust(wspace=0, hspace=0)
 
   return fig
