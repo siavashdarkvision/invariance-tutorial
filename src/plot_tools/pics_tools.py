@@ -27,11 +27,9 @@ def plot_image_grid(x_data, img_shape, grid_shape):
       if data_idx >= n_pics:
         break
 
-      #ax = plt.subplot(grid_shape[0], grid_shape[1], data_idx+1)
-
       img_data = x_data[data_idx].reshape(*img_shape)
 
-      ax[i].imshow(img_data, interpolation="nearest", vmin=0, vmax=1)
+      ax[i].imshow(img_data, interpolation="nearest", cmap="gray", vmin=0, vmax=1)
       ax[i].get_xaxis().set_visible(False)
       ax[i].get_yaxis().set_visible(False)
 
@@ -44,17 +42,11 @@ def plot_image_grid(x_data, img_shape, grid_shape):
         if data_idx >= n_pics:
           break
 
-        #ax = plt.subplot(grid_shape[0], grid_shape[1], data_idx+1)
-
         img_data = x_data[data_idx].reshape(*img_shape)
 
-        ax[i,j].imshow(img_data, interpolation="nearest", vmin=0, vmax=1)
+        ax[i,j].imshow(img_data, interpolation="nearest", cmap="gray", vmin=0, vmax=1)
         ax[i,j].get_xaxis().set_visible(False)
         ax[i,j].get_yaxis().set_visible(False)
   plt.tight_layout()
 
   return fig
-
-
-
-
